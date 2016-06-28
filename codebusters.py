@@ -15,10 +15,10 @@ def log(s):
 class p(object):
     def __init__(self, x, y, id):
         self.x, self.y, self.id = int(x), int(y), id
-    
+
     def __str__(self):
         return "[%d: %d,%d]"%(self.id, self.x, self.y,)
-    
+
 def dist(p1, p2):
     return ((p1.x - p2.x)**2 + (p1.y-p2.y)**2)**0.5
 
@@ -27,7 +27,7 @@ def findaghost(buster, ghosts):
         d = dist(buster, g)
         if 900 <= d and d <= 1760:
             return g
-            
+
     return None
 
 def towards(buster, ghost):
@@ -46,14 +46,14 @@ class gamestate(object):
         self.base = p(0,0,0) if my_team_id == 0 else p(MAPW-1, MAPH-1, 0)
         self.stun_used = {}
         self.turn = -1
-        
+    
     def start_turn(self):
         self.turn += 1
         self.ghosts = []
         self.team = []
         self.enemy = []
         self.carriers = []
-
+    
     def update(self, entity_id, x, y, entity_type, state, value):
         if entity_type == -1:
             self.ghosts.append(p(x,y,entity_id))
@@ -76,7 +76,7 @@ class gamestate(object):
                 log("New target for " + str(t) + " is " + str(t.target))
 
             target = t.target
-            
+
             if t.id in self.carriers:
                 if t.x == self.base.x and t.y == self.base.y:
                     yield "RELEASE I ain't afraid of no ghost!"
@@ -85,11 +85,11 @@ class gamestate(object):
                     yield "MOVE %d %d"%(self.base.x, self.base.y,)
             else:
                 canstun = not t.id in self.stun_used or turn - self.stun_used[t.id] >= STUN_RECHARGE
-                e = findaghost(t, enemy) if canstun else None
+                e = findaghost(t, self.enemy) if canstun else None
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
                 else:
-                    g = findaghost(t, ghosts)
+                    g = findaghost(t, self.ghosts)
                     if g:
                         yield "BUST %d Ghost Busters!"%(g.id,)
                     elif t.x == target.x and t.y == target.y:
@@ -110,16 +110,18 @@ state = gamestate(my_team_id, ghost_count, busters_per_player)
 # game loop
 while True:
     entities = int(input())  # the number of busters and ghosts visible to you
+    state.start_turn()
+    
     for i in range(entities):
         # entity_id: buster id or ghost id
         # y: position of this buster / ghost
         # entity_type: the team id if it is a buster, -1 if it is a ghost.
         # state: For busters: 0=idle, 1=carrying a ghost.
         # value: For busters: Ghost id being carried. For ghosts: number of busters attempting to trap this ghost.
-        entity_id, x, y, entity_type, state, value = [int(j) for j in input().split()]
-        gamestate.update(entity_id, x, y, entity_type, state, value)
+        entity_id, x, y, entity_type, entity_state, value = [int(j) for j in input().split()]
+        state.update(entity_id, x, y, entity_type, entity_state, value)
             
-    for cmd in gamestate.actions():
+    for cmd in state.actions():
         print (cmd)
 
         
