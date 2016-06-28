@@ -2,14 +2,15 @@ import sys
 import math
 import random
 
+MAPW = 16001
+MAPH = 9001
+STUN_RECHARGE=20
+
 def log(s):
+    # To debug: print("Debug messages...", file=sys.stderr)
     print(s, file=sys.stderr)
 
 # Send your busters out into the fog to trap ghosts and bring them home!
-
-busters_per_player = int(input())  # the amount of busters you control
-ghost_count = int(input())  # the amount of ghosts on the map
-my_team_id = int(input())  # if this is 0, your base is on the top left of the map, if it is one, on the bottom right
 
 class p(object):
     def __init__(self, x, y, id):
@@ -36,20 +37,79 @@ def towards(buster, ghost):
     yd = ghost.y - buster.y
     return p(ghost.x - xd * 1400 / d, ghost.y - yd * 1400 / d, 0)
 
-state = 'GO'
-targets = {}
-base = p(0,0,0) if my_team_id == 0 else p(16000, 9000, 0)
-stun_used = {}
+class gamestate(object):
+    def __init__(self, my_team_id, ghost_count, busters_per_player):
+        self.teamid = my_team_id
+        self.ghostcount = ghost_count
+        self.squadsize = busters_per_player
+        self.targets = {}
+        self.base = p(0,0,0) if my_team_id == 0 else p(MAPW-1, MAPH-1, 0)
+        self.stun_used = {}
+        self.turn = -1
+        
+    def start_turn(self):
+        self.turn += 1
+        self.ghosts = []
+        self.team = []
+        self.enemy = []
+        self.carriers = []
+
+    def update(self, entity_id, x, y, entity_type, state, value):
+        if entity_type == -1:
+            self.ghosts.append(p(x,y,entity_id))
+        elif entity_type == my_team_id:
+            buster = p(x,y,entity_id)
+            buster.target = None
+            self.team.append(buster)
+            if state == 1: self.carriers.append(entity_id)
+        else:
+            self.enemy.append(p(x,y,entity_id))
+
+    def actions(self):
+        #ret commands
+        for t in self.team:
+            t.target = self.targets[t.id] if t.id in self.targets else None
+            log("Current target for " + str(t) + " is " + str(t.target))
+            if not t.id in self.targets:
+                t.target = p(random.randrange(MAPW), random.randrange(MAPH), 0)
+                self.targets[t.id] = t.target
+                log("New target for " + str(t) + " is " + str(t.target))
+
+            target = t.target
+            
+            if t.id in self.carriers:
+                if t.x == self.base.x and t.y == self.base.y:
+                    yield "RELEASE I ain't afraid of no ghost!"
+                    del self.targets[t.id]
+                else:
+                    yield "MOVE %d %d"%(self.base.x, self.base.y,)
+            else:
+                canstun = not t.id in self.stun_used or turn - self.stun_used[t.id] >= STUN_RECHARGE
+                e = findaghost(t, enemy) if canstun else None
+                if e:
+                    yield "STUN %d Get lost copycat!"%(e.id,)
+                else:
+                    g = findaghost(t, ghosts)
+                    if g:
+                        yield "BUST %d Ghost Busters!"%(g.id,)
+                    elif t.x == target.x and t.y == target.y:
+                        log("In position, but no target...")
+                        yield "MOVE %d %d Who you gonna call?"%(target.x, target.y,)
+                        del self.targets[t.id]
+                    else:
+                        yield "MOVE %d %d"%(target.x, target.y,)
+
+
+
+busters_per_player = int(input())  # the amount of busters you control
+ghost_count = int(input())  # the amount of ghosts on the map
+my_team_id = int(input())  # if this is 0, your base is on the top left of the map, if it is one, on the bottom right
+
+state = gamestate(my_team_id, ghost_count, busters_per_player)
 
 # game loop
-turn = -1
 while True:
-    turn += 1
     entities = int(input())  # the number of busters and ghosts visible to you
-    ghosts = []
-    team = []
-    enemy = []
-    carriers = []
     for i in range(entities):
         # entity_id: buster id or ghost id
         # y: position of this buster / ghost
@@ -57,52 +117,12 @@ while True:
         # state: For busters: 0=idle, 1=carrying a ghost.
         # value: For busters: Ghost id being carried. For ghosts: number of busters attempting to trap this ghost.
         entity_id, x, y, entity_type, state, value = [int(j) for j in input().split()]
-        if entity_type == -1:
-            ghosts.append(p(x,y,entity_id))
-        elif entity_type == my_team_id:
-            buster = p(x,y,entity_id)
-            buster.target = None
-            team.append(buster)
-            if state == 1: carriers.append(entity_id)
-        else:
-            enemy.append(p(x,y,entity_id))
+        gamestate.update(entity_id, x, y, entity_type, state, value)
             
-    for t in team:
-        t.target = targets[t.id] if t.id in targets else None
-        log("Current target for " + str(t) + " is " + str(t.target))
-        if not t.id in targets:
-            # tg = ghosts[random.randrange(len(ghosts))]
-            # t.target = towards(t, tg)
-            t.target = p(random.randrange(16001), random.randrange(9001), 0)
-            targets[t.id] = t.target
-            log("New target for " + str(t) + " is " + str(t.target))
+    for cmd in gamestate.actions():
+        print (cmd)
+
+        
         # Write an action using print
-        # To debug: print("Debug messages...", file=sys.stderr)
-
         # MOVE x y | BUST id | RELEASE
-
-        target = t.target
-        
-        if t.id in carriers:
-            if t.x == base.x and t.y == base.y:
-                print("RELEASE I ain't afraid of no ghost!")
-                del targets[t.id]
-            else:
-                print("MOVE %d %d"%(base.x, base.y,))
-        else:
-            canstun = not t.id in stun_used or turn - stun_used[t.id] >= 20
-            e = findaghost(t, enemy) if canstun else None
-            if e:
-                print("STUN %d Get lost copycat!"%(e.id,))
-            else:
-                g = findaghost(t, ghosts)
-                if g:
-                    print("BUST %d Ghost Busters!"%(g.id,))
-                elif t.x == target.x and t.y == target.y:
-                    log("In position, but no target...")
-                    print("MOVE %d %d Who you gonna call?"%(target.x, target.y,))
-                    del targets[t.id]
-                else:
-                    print("MOVE %d %d"%(target.x, target.y,))
-        
 
