@@ -4,6 +4,7 @@ import random
 
 MAPW = 16001
 MAPH = 9001
+GRIDSIZE = 2000
 STUN_RECHARGE=20
 
 def log(s):
@@ -13,7 +14,7 @@ def log(s):
 # Send your busters out into the fog to trap ghosts and bring them home!
 
 class p(object):
-    def __init__(self, x, y, id):
+    def __init__(self, x, y, id = 0):
         self.x, self.y, self.id = int(x), int(y), id
 
     def __str__(self):
@@ -23,6 +24,10 @@ def dist(p1, p2):
     return ((p1.x - p2.x)**2 + (p1.y-p2.y)**2)**0.5
 
 def findaghost(buster, ghosts):
+    if ghosts: 
+        ghostdistances = [ dist(buster, g) for g in ghosts ]
+        log("%d spotted: %s"%(buster.id, ghostdistances,))
+        
     for g in ghosts:
         d = dist(buster, g)
         if 900 <= d and d <= 1760:
@@ -35,7 +40,61 @@ def towards(buster, ghost):
     d = dist(buster, ghost)
     xd = ghost.x - buster.x
     yd = ghost.y - buster.y
-    return p(ghost.x - xd * 1400 / d, ghost.y - yd * 1400 / d, 0)
+    return p(ghost.x - xd * 1400 / d, ghost.y - yd * 1400 / d)
+
+def getbase(teamid, offset=1100):
+    return p(offset, offset) if teamid == 0 else p(MAPW-offset, MAPH-offset)
+    
+class Cell(object):
+    def __init__(self, x, y, explored = False):
+        self.x, self.y, self.explored = x, y, explored
+        
+class grid(object):
+    def __init__(self, gridsize):
+        self.gridsize = gridsize
+        self.w, self.h = int(MAPW/gridsize), int(MAPH/gridsize)
+        if MAPW%gridsize>100: self.w += 1
+        if MAPH%gridsize>100: self.h += 1
+        self.data = [ [Cell(x, y) for x in range(self.w) ] for y in range(self.h) ]
+        # for row in self.data:
+        #   for cell in row:
+        #     center = self.centerof(cell)
+        #     log("%d %d : %d %d"%(cell.x, cell.y, center.x, center.y,))
+
+    def getcells(self):
+        flat = []
+        for line in self.data:
+            for cell in line:
+                flat.append(cell)
+        return flat
+
+    def getfor(self, x, y):
+        gy = int(y/self.gridsize)
+        if (gy >= len(self.data)): gy = len(self.data)-1
+        gx = int(x/self.gridsize)
+        if (gx >= len(self.data[gy])): gx = len(self.data[gy])-1
+        return self.data[gy][gx]
+
+    def closest(self, x, y, data):
+        def celldist(x, y, cell):
+            center = self.centerof(cell)
+            xd = center.x-x
+            yd = center.y-y
+            return math.sqrt(xd**2 + yd**2)
+        distances = [ (cell, celldist(x, y, cell),) for cell in data ]
+        distances.sort(key=lambda item:item[1])
+        closestcell = distances[0][0]
+        log("Chose %d %d from %d items"%(closestcell.x, closestcell.y, len(distances),))
+        return closestcell
+    
+    def centerof(self, cell):
+        gx, gy = cell.x*self.gridsize, cell.y*self.gridsize
+        ngx, ngy = gx + self.gridsize, gy + self.gridsize
+        if ngx>MAPW: ngx = MAPW
+        if ngy>MAPH: ngy = MAPH
+        cx = int((gx+ngx)/2)
+        cy = int((gy+ngy)/2)
+        return p(cx, cy)
 
 class gamestate(object):
     def __init__(self, my_team_id, ghost_count, busters_per_player):
@@ -43,9 +102,13 @@ class gamestate(object):
         self.ghostcount = ghost_count
         self.squadsize = busters_per_player
         self.targets = {}
-        self.base = p(0,0,0) if my_team_id == 0 else p(MAPW-1, MAPH-1, 0)
+        self.base = getbase(my_team_id)
         self.stun_used = {}
         self.turn = -1
+        self.neutralized = []
+        self.ghostmem = {}
+        self.grid = grid(GRIDSIZE)
+        self.toexplore = self.grid.getcells()
     
     def start_turn(self):
         self.turn += 1
@@ -56,22 +119,51 @@ class gamestate(object):
     
     def update(self, entity_id, x, y, entity_type, state, value):
         if entity_type == -1:
-            self.ghosts.append(p(x,y,entity_id))
+            newghost = p(x,y,entity_id)
+            self.ghosts.append(newghost)
+            if not entity_id in self.ghostmem:
+                self.ghostmem[entity_id] = newghost
         elif entity_type == my_team_id:
             buster = p(x,y,entity_id)
             buster.target = None
             self.team.append(buster)
             if state == 1: self.carriers.append(entity_id)
+            currentcell = self.grid.getfor(buster.x, buster.y)
+            if currentcell in self.toexplore: self.toexplore.remove(currentcell)
+            
         else:
             self.enemy.append(p(x,y,entity_id))
+            if state == 1 and value in self.ghostmem: del self.ghostmem[value]
 
     def actions(self):
         #ret commands
+        firstbuster = self.team[0].id
         for t in self.team:
+            terminator = t.id == firstbuster and len(self.team) > 1 and len(self.team)>len(self.neutralized)
             t.target = self.targets[t.id] if t.id in self.targets else None
             log("Current target for " + str(t) + " is " + str(t.target))
             if not t.id in self.targets:
-                t.target = p(random.randrange(MAPW), random.randrange(MAPH), 0)
+                if terminator:
+                    enemybase = getbase(1-self.teamid, 1600)
+                    t.target = enemybase
+                else:
+                    if self.ghostmem:
+                        ghosts = self.ghostmem.values()
+                        ghostdists = [ (dist(t, g), g,) for g in ghosts]
+                        filtered = []
+                        for d, g in ghostdists:
+                            if d < 20:
+                                del self.ghostmem[g.id]
+                            else:
+                                filtered.append((d,g,))
+                        if filtered:
+                            ghostdists = filtered
+                            ghostdists.sort(key=lambda pair: pair[0])
+                            t.target = ghostdists[0][1]
+                    if not t.target:
+                        tcell = self.grid.closest(t.x, t.y, self.toexplore)
+                        center = self.grid.centerof(tcell)
+                        t.target = p(center.x, center.y)
                 self.targets[t.id] = t.target
                 log("New target for " + str(t) + " is " + str(t.target))
 
@@ -80,26 +172,39 @@ class gamestate(object):
             if t.id in self.carriers:
                 if t.x == self.base.x and t.y == self.base.y:
                     yield "RELEASE I ain't afraid of no ghost!"
+                    ghostid = self.targets[t.id].id
+                    if ghostid in self.ghostmem:
+                        del self.ghostmem[ghostid]
                     del self.targets[t.id]
                 else:
                     yield "MOVE %d %d"%(self.base.x, self.base.y,)
             else:
-                canstun = not t.id in self.stun_used or turn - self.stun_used[t.id] >= STUN_RECHARGE
-                e = findaghost(t, self.enemy) if canstun else None
+                canstun = not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE
+                closeenemies = [ enemy for enemy in self.enemy if not enemy in self.neutralized ]
+                e = findaghost(t, closeenemies) if canstun else None
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
+                    self.stun_used[t.id] = self.turn
+                    #self.neutralized.append(e.id)
                 else:
-                    g = findaghost(t, self.ghosts)
+                    g = findaghost(t, self.ghosts) if not terminator else None
                     if g:
                         yield "BUST %d Ghost Busters!"%(g.id,)
                     elif t.x == target.x and t.y == target.y:
-                        log("In position, but no target...")
+                        log("%d in position, but no target..."%(t.id))
                         yield "MOVE %d %d Who you gonna call?"%(target.x, target.y,)
                         del self.targets[t.id]
                     else:
                         yield "MOVE %d %d"%(target.x, target.y,)
-
-
+                        
+    def dump(self):
+        log("----------")
+        for r in range(self.grid.h):
+            row = ""
+            for c in range(self.grid.w):
+                if self.grid.data[r][c] in self.toexplore: row += "*"
+                else: row += " "
+            log(row)
 
 busters_per_player = int(input())  # the amount of busters you control
 ghost_count = int(input())  # the amount of ghosts on the map
@@ -120,6 +225,7 @@ while True:
         # value: For busters: Ghost id being carried. For ghosts: number of busters attempting to trap this ghost.
         entity_id, x, y, entity_type, entity_state, value = [int(j) for j in input().split()]
         state.update(entity_id, x, y, entity_type, entity_state, value)
+        state.dump()
             
     for cmd in state.actions():
         print (cmd)
