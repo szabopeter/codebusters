@@ -33,15 +33,15 @@ def dist(p1, p2):
 
 def celldist(origo, cell):
     xd = origo.x - cell.center.x
-    yd = origo.y - cell-center.y
-    return math.sqrt(**2 + yd**2)
+    yd = origo.y - cell.center.y
+    return math.sqrt(xd**2 + yd**2)
 
 def isshootingdistance(d):
-    return SHOOTMIN <= pair.d and pair.d <= SHOOTMAX
+    return SHOOTMIN <= d and d <= SHOOTMAX
 
 def sortdistances(origo, points):
     if not points: return []
-    withdistances = [ (dist(origo, pt) for pt in points ]
+    withdistances = [ (dist(origo, pt), pt,) for pt in points ]
     withdistances.sort(key=lambda pair:pair[0])
     return withdistances
 
@@ -50,8 +50,8 @@ def findshootable(shooter, targets):
     if distancesandtargets: 
         log("%d spotted: %s"%(shooter.id, [ pair[0] for pair in distancesandtargets ],))
 
-    filteredfordist = [ pair for pair in distancesandtargets if isshootingdistance(pair.d) ]
-    return filteredfordist[0] if filteredfordist else None
+    filteredfordist = [ pair for pair in distancesandtargets if isshootingdistance(pair[0]) ]
+    return filteredfordist[0][1] if filteredfordist else None
 
 def towards(buster, ghost):
     TD = 1500
@@ -127,22 +127,27 @@ class gamestate(object):
         self.enemy = []
         self.carriers = []
 
-    def updatebuster(self, entity_id, x, y, state)
+    def updatebuster(self, entity_id, x, y, state):
         buster = p(x, y, entity_id)
         self.team.append(buster)
         if state == 1: self.carriers.append(entity_id)
+        #todo: stuned state
         currentcell = self.grid.getfor(buster.x, buster.y)
         if currentcell in self.toexplore: self.toexplore.remove(currentcell)
+        return buster
 
     def updateghost(self, entity_id, x, y):
         newghost = p(x,y,entity_id)
         self.ghosts.append(newghost)
         if not entity_id in self.ghostmem:
             self.ghostmem[entity_id] = newghost
+        return newghost
     
     def updateenemy(self, entity_id, x, y, hasghost, ghostid):
-        self.enemy.append(p(x,y,entity_id))
+        newenemy = p(x,y,entity_id)
+        self.enemy.append(newenemy)
         if hasghost == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
+        return newenemy
 
     def update(self, entity_id, x, y, entity_type, state, value):
         if entity_type == -1:
@@ -158,7 +163,10 @@ class gamestate(object):
         #ret commands
         firstbuster = self.team[0].id
         for t in self.team:
-            terminator = t.id == firstbuster and len(self.team) > 1 and len(self.team)>len(self.neutralized)
+            terminator = t.id == firstbuster \
+                and len(self.team) > 1 \
+                and len(self.team)>len(self.neutralized) \
+                and (not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE / 2)
             t.target = self.targets[t.id] if t.id in self.targets else None
             log("Current target for " + str(t) + " is " + str(t.target))
             if not t.id in self.targets:
@@ -200,13 +208,13 @@ class gamestate(object):
             else:
                 canstun = not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE
                 closeenemies = [ enemy for enemy in self.enemy if not enemy in self.neutralized ]
-                e = findaghost(t, closeenemies) if canstun else None
+                e = findshootable(t, closeenemies) if canstun else None
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
                     self.stun_used[t.id] = self.turn
                     #self.neutralized.append(e.id)
                 else:
-                    g = findaghost(t, self.ghosts) if not terminator else None
+                    g = findshootable(t, self.ghosts) if not terminator else None
                     if g:
                         yield "BUST %d Ghost Busters!"%(g.id,)
                     elif t.x == target.x and t.y == target.y:
