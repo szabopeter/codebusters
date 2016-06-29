@@ -5,7 +5,15 @@ import random
 MAPW = 16001
 MAPH = 9001
 GRIDSIZE = 2000
-STUN_RECHARGE=20
+STUN_RECHARGE = 20
+DEFAULTBASEOFFSET = 1100
+SHOOTMIN = 900
+SHOOTMAX = 1760
+
+TODO="""
+select different targets, especially in the opening turns
+detect if the last command was executed successfully
+"""
 
 def log(s):
     # To debug: print("Debug messages...", file=sys.stderr)
@@ -23,43 +31,45 @@ class p(object):
 def dist(p1, p2):
     return ((p1.x - p2.x)**2 + (p1.y-p2.y)**2)**0.5
 
-def findaghost(buster, ghosts):
-    if ghosts: 
-        ghostdistances = [ dist(buster, g) for g in ghosts ]
-        log("%d spotted: %s"%(buster.id, ghostdistances,))
-        
-    for g in ghosts:
-        d = dist(buster, g)
-        if 900 <= d and d <= 1760:
-            return g
+def celldist(origo, cell):
+    xd = origo.x - cell.center.x
+    yd = origo.y - cell-center.y
+    return math.sqrt(**2 + yd**2)
 
-    return None
+def isshootingdistance(d):
+    return SHOOTMIN <= pair.d and pair.d <= SHOOTMAX
+
+def sortdistances(origo, points):
+    if not points: return []
+    withdistances = [ (dist(origo, pt) for pt in points ]
+    withdistances.sort(key=lambda pair:pair[0])
+    return withdistances
+
+def findshootable(shooter, targets):
+    distancesandtargets = sortdistances(shooter, targets)
+    if distancesandtargets: 
+        log("%d spotted: %s"%(shooter.id, [ pair[0] for pair in distancesandtargets ],))
+
+    filteredfordist = [ pair for pair in distancesandtargets if isshootingdistance(pair.d) ]
+    return filteredfordist[0] if filteredfordist else None
 
 def towards(buster, ghost):
-    td = 1000
+    TD = 1500
     d = dist(buster, ghost)
     xd = ghost.x - buster.x
     yd = ghost.y - buster.y
-    return p(ghost.x - xd * 1400 / d, ghost.y - yd * 1400 / d)
+    return p(ghost.x - xd * TD / d, ghost.y - yd * TD / d)
 
-def getbase(teamid, offset=1100):
+def getbase(teamid, offset=DEFAULTBASEOFFSET):
     return p(offset, offset) if teamid == 0 else p(MAPW-offset, MAPH-offset)
     
-class Cell(object):
-    def __init__(self, x, y, explored = False):
-        self.x, self.y, self.explored = x, y, explored
-        
 class grid(object):
     def __init__(self, gridsize):
         self.gridsize = gridsize
         self.w, self.h = int(MAPW/gridsize), int(MAPH/gridsize)
         if MAPW%gridsize>100: self.w += 1
         if MAPH%gridsize>100: self.h += 1
-        self.data = [ [Cell(x, y) for x in range(self.w) ] for y in range(self.h) ]
-        # for row in self.data:
-        #   for cell in row:
-        #     center = self.centerof(cell)
-        #     log("%d %d : %d %d"%(cell.x, cell.y, center.x, center.y,))
+        self.data = [ [ self.createcell(x, y) for x in range(self.w) ] for y in range(self.h) ]
 
     def getcells(self):
         flat = []
@@ -75,18 +85,18 @@ class grid(object):
         if (gx >= len(self.data[gy])): gx = len(self.data[gy])-1
         return self.data[gy][gx]
 
-    def closest(self, x, y, data):
-        def celldist(x, y, cell):
-            center = self.centerof(cell)
-            xd = center.x-x
-            yd = center.y-y
-            return math.sqrt(xd**2 + yd**2)
-        distances = [ (cell, celldist(x, y, cell),) for cell in data ]
+    def closest(self, origo, data):
+        distances = [ (cell, celldist(origo, cell),) for cell in data ]
         distances.sort(key=lambda item:item[1])
         closestcell = distances[0][0]
-        log("Chose %d %d from %d items"%(closestcell.x, closestcell.y, len(distances),))
+        log("Chose %d,%d from %d items"%(closestcell.x, closestcell.y, len(distances),))
         return closestcell
     
+    def createcell(self, gx, gy):
+        cell = p(gx, gy)
+        cell.center = self.centerof(cell)
+        return cell
+
     def centerof(self, cell):
         gx, gy = cell.x*self.gridsize, cell.y*self.gridsize
         ngx, ngy = gx + self.gridsize, gy + self.gridsize
@@ -116,24 +126,33 @@ class gamestate(object):
         self.team = []
         self.enemy = []
         self.carriers = []
+
+    def updatebuster(self, entity_id, x, y, state)
+        buster = p(x, y, entity_id)
+        self.team.append(buster)
+        if state == 1: self.carriers.append(entity_id)
+        currentcell = self.grid.getfor(buster.x, buster.y)
+        if currentcell in self.toexplore: self.toexplore.remove(currentcell)
+
+    def updateghost(self, entity_id, x, y):
+        newghost = p(x,y,entity_id)
+        self.ghosts.append(newghost)
+        if not entity_id in self.ghostmem:
+            self.ghostmem[entity_id] = newghost
     
+    def updateenemy(self, entity_id, x, y, hasghost, ghostid):
+        self.enemy.append(p(x,y,entity_id))
+        if hasghost == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
+
     def update(self, entity_id, x, y, entity_type, state, value):
         if entity_type == -1:
-            newghost = p(x,y,entity_id)
-            self.ghosts.append(newghost)
-            if not entity_id in self.ghostmem:
-                self.ghostmem[entity_id] = newghost
+            self.updateghost(entity_id, x, y)
         elif entity_type == my_team_id:
-            buster = p(x,y,entity_id)
+            buster = self.updatebuster(entity_id, x, y, state)
+            #todo: what about carried ghosts?
             buster.target = None
-            self.team.append(buster)
-            if state == 1: self.carriers.append(entity_id)
-            currentcell = self.grid.getfor(buster.x, buster.y)
-            if currentcell in self.toexplore: self.toexplore.remove(currentcell)
-            
         else:
-            self.enemy.append(p(x,y,entity_id))
-            if state == 1 and value in self.ghostmem: del self.ghostmem[value]
+            self.updateenemy(entity_id, x, y, state, value)
 
     def actions(self):
         #ret commands
@@ -161,7 +180,7 @@ class gamestate(object):
                             ghostdists.sort(key=lambda pair: pair[0])
                             t.target = ghostdists[0][1]
                     if not t.target:
-                        tcell = self.grid.closest(t.x, t.y, self.toexplore)
+                        tcell = self.grid.closest(t, self.toexplore)
                         center = self.grid.centerof(tcell)
                         t.target = p(center.x, center.y)
                 self.targets[t.id] = t.target
