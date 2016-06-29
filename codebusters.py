@@ -126,12 +126,13 @@ class gamestate(object):
         self.team = []
         self.enemy = []
         self.carriers = []
+        self.stunned = []
 
     def updatebuster(self, entity_id, x, y, state):
         buster = p(x, y, entity_id)
         self.team.append(buster)
         if state == 1: self.carriers.append(entity_id)
-        #todo: stuned state
+        if state == 2: self.stunned.append(entity_id)
         currentcell = self.grid.getfor(buster.x, buster.y)
         if currentcell in self.toexplore: self.toexplore.remove(currentcell)
         return buster
@@ -163,6 +164,9 @@ class gamestate(object):
         #ret commands
         firstbuster = self.team[0].id
         for t in self.team:
+            if t.id in self.stunned:
+                yield "MOVE 0 0 You'll regret that!"
+                continue
             terminator = t.id == firstbuster \
                 and len(self.team) > 1 \
                 and len(self.team)>len(self.neutralized) \
@@ -252,7 +256,7 @@ while True:
         # value: For busters: Ghost id being carried. For ghosts: number of busters attempting to trap this ghost.
         entity_id, x, y, entity_type, entity_state, value = [int(j) for j in input().split()]
         state.update(entity_id, x, y, entity_type, entity_state, value)
-        state.dump()
+        # state.dump()
             
     for cmd in state.actions():
         print (cmd)
