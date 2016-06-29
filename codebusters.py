@@ -21,12 +21,30 @@ def log(s):
 
 # Send your busters out into the fog to trap ghosts and bring them home!
 
-class p(object):
+class Point(object):
     def __init__(self, x, y, id = 0):
         self.x, self.y, self.id = int(x), int(y), id
 
     def __str__(self):
         return "[%d: %d,%d]"%(self.id, self.x, self.y,)
+
+class Cell(Point):
+    def __init__(self, pt, center):
+        Point.__init__(self, pt.x, pt.y)
+        self.center = center
+
+class Actor(Point):
+    def __init__(self, x, y, id):
+        Point.__init__(self, x, y, id)
+
+class Enemy(Actor):
+    pass
+
+class Buster(Actor):
+    pass
+
+class Ghost(Actor):
+    pass
 
 def dist(p1, p2):
     return ((p1.x - p2.x)**2 + (p1.y-p2.y)**2)**0.5
@@ -61,7 +79,7 @@ def towards(buster, ghost):
     return p(ghost.x - xd * TD / d, ghost.y - yd * TD / d)
 
 def getbase(teamid, offset=DEFAULTBASEOFFSET):
-    return p(offset, offset) if teamid == 0 else p(MAPW-offset, MAPH-offset)
+    return Point(offset, offset) if teamid == 0 else Point(MAPW-offset, MAPH-offset)
     
 class grid(object):
     def __init__(self, gridsize):
@@ -93,9 +111,8 @@ class grid(object):
         return closestcell
     
     def createcell(self, gx, gy):
-        cell = p(gx, gy)
-        cell.center = self.centerof(cell)
-        return cell
+        pt = Point(gx, gy)
+        return Cell(pt, self.centerof(pt))
 
     def centerof(self, cell):
         gx, gy = cell.x*self.gridsize, cell.y*self.gridsize
@@ -104,7 +121,7 @@ class grid(object):
         if ngy>MAPH: ngy = MAPH
         cx = int((gx+ngx)/2)
         cy = int((gy+ngy)/2)
-        return p(cx, cy)
+        return Point(cx, cy)
 
 class gamestate(object):
     def __init__(self, my_team_id, ghost_count, busters_per_player):
@@ -129,7 +146,7 @@ class gamestate(object):
         self.stunned = []
 
     def updatebuster(self, entity_id, x, y, state):
-        buster = p(x, y, entity_id)
+        buster = Buster(x, y, entity_id)
         self.team.append(buster)
         if state == 1: self.carriers.append(entity_id)
         if state == 2: self.stunned.append(entity_id)
@@ -138,14 +155,14 @@ class gamestate(object):
         return buster
 
     def updateghost(self, entity_id, x, y):
-        newghost = p(x,y,entity_id)
+        newghost = Ghost(x,y,entity_id)
         self.ghosts.append(newghost)
         if not entity_id in self.ghostmem:
             self.ghostmem[entity_id] = newghost
         return newghost
     
     def updateenemy(self, entity_id, x, y, hasghost, ghostid):
-        newenemy = p(x,y,entity_id)
+        newenemy = Enemy(x,y,entity_id)
         self.enemy.append(newenemy)
         if hasghost == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
         return newenemy
@@ -205,8 +222,9 @@ class gamestate(object):
                                 filtered.append((d,g,))
                         if filtered:
                             ghostdists = filtered
-                            ghostdists.sort(key=lambda pair: pair[0])
-                            t.target = ghostdists[0][1]
+                            ghostdists.sort(key=lambda (d, g,) : d)
+                            d, g = ghostdists[0]
+                            t.target = g
                     if not t.target:
                         consider = self.toexplore[:]
                         centers = {}
@@ -234,6 +252,7 @@ class gamestate(object):
             else:
                 canstun = not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE
                 closeenemies = [ enemy for enemy in self.enemy if not enemy in self.neutralized ]
+                #todo extr abstr canstunin(buster, turncount)
                 e = findshootable(t, closeenemies) if canstun else None
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
