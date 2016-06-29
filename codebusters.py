@@ -12,7 +12,7 @@ SHOOTMAX = 1760
 
 TODO="""
 select different targets, especially in the opening turns
-detect if the last command was executed successfully
+rotate terminator duty
 """
 
 def log(s):
@@ -192,9 +192,15 @@ class gamestate(object):
                             ghostdists.sort(key=lambda pair: pair[0])
                             t.target = ghostdists[0][1]
                     if not t.target:
-                        tcell = self.grid.closest(t, self.toexplore)
-                        center = self.grid.centerof(tcell)
-                        t.target = p(center.x, center.y)
+                        consider = self.toexplore[:]
+                        centers = {}
+                        for cell in consider:
+                            centers[cell.center] = cell
+                        for targeted in self.targets.values():
+                            if targeted in centers:
+                                consider.remove(centers[targeted])
+                        tcell = self.grid.closest(t, consider)
+                        t.target = tcell.center
                 self.targets[t.id] = t.target
                 log("New target for " + str(t) + " is " + str(t.target))
 
@@ -216,6 +222,7 @@ class gamestate(object):
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
                     self.stun_used[t.id] = self.turn
+                    del self.targets[t.id]
                     #self.neutralized.append(e.id)
                 else:
                     g = findshootable(t, self.ghosts) if not terminator else None
