@@ -11,8 +11,8 @@ SHOOTMIN = 900
 SHOOTMAX = 1760
 
 TODO="""
-select different targets, especially in the opening turns
-rotate terminator duty
+???
+PROFIT!
 """
 
 def log(s):
@@ -160,14 +160,30 @@ class gamestate(object):
         else:
             self.updateenemy(entity_id, x, y, state, value)
 
+    def getenemybase(self):
+        return getbase(1-self.teamid, 2000)
+
+    def chooseterminator(self):
+        enemybase = self.getenemybase()
+        myteam = sortdistances(enemybase, self.team)
+        for pair in myteam:
+            dst, buster = pair
+            if buster.id in self.stunned: continue
+            if buster.id in self.carriers: continue
+            if buster.id in self.stun_used \
+                and self.turn - self.stun_used[buster.id] < STUN_RECHARGE - 3:
+                    continue
+            return buster.id
+        return -1
+
     def actions(self):
         #ret commands
-        firstbuster = self.team[0].id
+        terminatorid = self.chooseterminator()
         for t in self.team:
             if t.id in self.stunned:
                 yield "MOVE 0 0 You'll regret that!"
                 continue
-            terminator = t.id == firstbuster \
+            terminator = t.id == terminatorid \
                 and len(self.team) > 1 \
                 and len(self.team)>len(self.neutralized) \
                 and (not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE / 2)
@@ -175,7 +191,7 @@ class gamestate(object):
             log("Current target for " + str(t) + " is " + str(t.target))
             if not t.id in self.targets:
                 if terminator:
-                    enemybase = getbase(1-self.teamid, 1600)
+                    enemybase = self.getenemybase()
                     t.target = enemybase
                 else:
                     if self.ghostmem:
