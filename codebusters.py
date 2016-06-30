@@ -131,7 +131,10 @@ class grid(object):
         return Point(cx, cy)
 
 class gamestate(object):
-    def __init__(self, my_team_id, ghost_count, busters_per_player):
+    def __init__(self):
+        pass
+
+    def setup(self, my_team_id, ghost_count, busters_per_player):
         self.teamid = my_team_id
         self.ghostcount = ghost_count
         self.squadsize = busters_per_player
@@ -296,30 +299,32 @@ class gamestate(object):
                 else: row += " "
             log(row)
 
-busters_per_player = int(input())  # the amount of busters you control
-ghost_count = int(input())  # the amount of ghosts on the map
-my_team_id = int(input())  # if this is 0, your base is on the top left of the map, if it is one, on the bottom right
+if __name__ == "__main__":
+    busters_per_player = int(input())  # the amount of busters you control
+    ghost_count = int(input())  # the amount of ghosts on the map
+    my_team_id = int(input())  # if this is 0, your base is on the top left of the map, if it is one, on the bottom right
 
-state = gamestate(my_team_id, ghost_count, busters_per_player)
+    state = gamestate()
+    state.setup(my_team_id, ghost_count, busters_per_player)
 
-# game loop
-while True:
-    entities = int(input())  # the number of busters and ghosts visible to you
-    state.start_turn()
-    
-    for i in range(entities):
-        # entity_id: buster id or ghost id
-        # y: position of this buster / ghost
-        # entity_type: the team id if it is a buster, -1 if it is a ghost.
-        # state: For busters: 0=idle, 1=carrying a ghost, 2=stunned
-        # value: For busters: Ghost id being carried. For ghosts: number of busters attempting to trap this ghost.
-        entity_id, x, y, entity_type, entity_state, value = [int(j) for j in input().split()]
-        state.update(entity_id, x, y, entity_type, entity_state, value)
-        # state.dump()
-            
-    for cmd in state.actions():
-        print (cmd)
-
+    # game loop
+    while True:
+        entities = int(input())  # the number of busters and ghosts visible to you
+        state.start_turn()
         
-        # Write an action using print
-        # MOVE x y | BUST id | RELEASE
+        for i in range(entities):
+            # entity_id: buster id or ghost id
+            # y: position of this buster / ghost
+            # entity_type: the team id if it is a buster, -1 if it is a ghost.
+            # state: For busters: 0=idle, 1=carrying a ghost, 2=stunned
+            # value: For busters: Ghost id being carried. For ghosts: number of busters attempting to trap this ghost.
+            entity_id, x, y, entity_type, entity_state, value = [int(j) for j in input().split()]
+            state.update(entity_id, x, y, entity_type, entity_state, value)
+            # state.dump()
+                
+        for cmd in state.actions():
+            print (cmd)
+
+            
+            # Write an action using print
+            # MOVE x y | BUST id | RELEASE
