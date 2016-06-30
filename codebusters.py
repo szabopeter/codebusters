@@ -143,16 +143,14 @@ class gamestate(object):
         self.turn += 1
         self.ghosts = []
         self.enemy = []
-        self.carriers = []
-        self.stunned = []
 
     def updatebuster(self, entity_id, x, y, state):
         if not entity_id in self.team:
             self.team[entity_id] = Buster(x, y, entity_id)
         buster = self.team[entity_id]
         buster.x, buster.y = x, y
-        if state == 1: self.carriers.append(entity_id)
-        if state == 2: self.stunned.append(entity_id)
+        buster.carrying = state == 1
+        buster.isstunned = state == 2
         currentcell = self.grid.getfor(buster.x, buster.y)
         if currentcell in self.toexplore: self.toexplore.remove(currentcell)
         return buster
@@ -168,6 +166,8 @@ class gamestate(object):
         newenemy = Enemy(x,y,entity_id)
         self.enemy.append(newenemy)
         if hasghost == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
+        newenemy.carrying = hasghost == 1
+        newenemy.isstunned = hasghost == 2
         return newenemy
 
     def update(self, entity_id, x, y, entity_type, state, value):
@@ -187,8 +187,8 @@ class gamestate(object):
         myteam = sortdistances(enemybase, self.team.values())
         for pair in myteam:
             dst, buster = pair
-            if buster.id in self.stunned: continue
-            if buster.id in self.carriers: continue
+            if buster.isstunned: continue
+            if buster.carrying: continue
             if buster.id in self.stun_used \
                 and self.turn - self.stun_used[buster.id] < STUN_RECHARGE - 3:
                     continue
@@ -202,7 +202,7 @@ class gamestate(object):
         #ret commands
         terminatorid = self.chooseterminator()
         for t in self.team.values():
-            if t.id in self.stunned:
+            if t.isstunned:
                 yield "MOVE 0 0 You'll regret that!"
                 continue
             terminator = t.id == terminatorid \
@@ -226,7 +226,7 @@ class gamestate(object):
                                 filtered.append((d,g,))
                         if filtered:
                             ghostdists = filtered
-                            ghostdists.sort(key=lambda (d, g,) : d)
+                            ghostdists.sort(key=lambda pair : pair[0])
                             d, g = ghostdists[0]
                             t.target = g
                     if not t.target:
@@ -241,7 +241,7 @@ class gamestate(object):
                         t.target = tcell.center
                 log("New target for " + str(t) + " is " + str(t.target))
 
-            if t.id in self.carriers:
+            if t.carrying:
                 if t.x == self.base.x and t.y == self.base.y:
                     yield "RELEASE I ain't afraid of no ghost!"
                     ghostid = t.target.id
@@ -252,7 +252,10 @@ class gamestate(object):
                     yield "MOVE %d %d"%(self.base.x, self.base.y,)
             else:
                 canstun = not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE
-                closeenemies = [ enemy for enemy in self.enemy if not enemy in self.neutralized ]
+                closeenemies = [ enemy for enemy in self.enemy \
+                    if not enemy in self.neutralized \
+                    and not enemy.isstunned \
+                    and enemy.carrying ]
                 #todo extr abstr canstunin(buster, turncount)
                 e = findshootable(t, closeenemies) if canstun else None
                 if e:
@@ -307,4 +310,3 @@ while True:
         
         # Write an action using print
         # MOVE x y | BUST id | RELEASE
-
