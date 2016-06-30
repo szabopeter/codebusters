@@ -11,7 +11,7 @@ SHOOTMIN = 900
 SHOOTMAX = 1760
 
 TODO="""
-Remember the ghosts we carry.
+Remember the ghosts we carry. And forget the ones we lost.
 Insist less on set targets.
 Target carriers instead of strong ghosts.
 ???
@@ -50,6 +50,8 @@ class Buster(Actor):
 
 class Ghost(Actor):
     pass
+
+NOTCARRYING="Not carrying"
 
 def dist(p1, p2):
     return ((p1.x - p2.x)**2 + (p1.y-p2.y)**2)**0.5
@@ -141,23 +143,11 @@ class gamestate(object):
         self.grid = grid(GRIDSIZE)
         self.toexplore = self.grid.getcells()
         self.team = {}
+        self.enemy = {}
     
     def start_turn(self):
         self.turn += 1
         self.ghosts = []
-        self.enemy = []
-
-    def updatebuster(self, entity_id, x, y, state):
-        if not entity_id in self.team:
-            self.team[entity_id] = Buster(x, y, entity_id)
-        buster = self.team[entity_id]
-        buster.x, buster.y = x, y
-        buster.carrying = state == 1
-        buster.isstunned = state == 2
-        if buster.isstunned: buster.target = None
-        currentcell = self.grid.getfor(buster.x, buster.y)
-        if currentcell in self.toexplore: self.toexplore.remove(currentcell)
-        return buster
 
     def updateghost(self, entity_id, x, y, stamina):
         newghost = Ghost(x,y,entity_id)
@@ -167,20 +157,33 @@ class gamestate(object):
             self.ghostmem[entity_id] = newghost
         return newghost
     
-    def updateenemy(self, entity_id, x, y, hasghost, ghostid):
-        newenemy = Enemy(x,y,entity_id)
-        self.enemy.append(newenemy)
-        if hasghost == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
-        newenemy.carrying = hasghost == 1
-        newenemy.isstunned = hasghost == 2
-        return newenemy
+    def updatebuster(self, entity_id, x, y, state, ghostcarried):
+        if not entity_id in self.team:
+            self.team[entity_id] = Buster(x, y, entity_id)
+        buster = self.team[entity_id]
+        buster.x, buster.y = x, y
+        buster.carrying = ghostcarried if state == 1 else NOTCARRYING
+        buster.isstunned = state == 2
+        if buster.isstunned: buster.target = None
+        currentcell = self.grid.getfor(buster.x, buster.y)
+        if currentcell in self.toexplore: self.toexplore.remove(currentcell)
+        return buster
+
+    def updateenemy(self, entity_id, x, y, state, ghostid):
+        if not entity_id in self.enemy:
+            self.enemy[entity_id] = Enemy(x, y, entity_id)
+        enemy = self.enemy[entity_id]
+        enemy.x, enemy.y = x, y
+        if state == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
+        enemy.carrying = ghostid if state == 1 else NOTCARRYING
+        enemy.isstunned = hasghost == 2
+        return enemy
 
     def update(self, entity_id, x, y, entity_type, state, value):
         if entity_type == -1:
             self.updateghost(entity_id, x, y, state)
         elif entity_type == my_team_id:
-            buster = self.updatebuster(entity_id, x, y, state)
-            #todo: what about carried ghosts?
+            buster = self.updatebuster(entity_id, x, y, state, value)
         else:
             self.updateenemy(entity_id, x, y, state, value)
 
@@ -193,7 +196,7 @@ class gamestate(object):
         for pair in myteam:
             dst, buster = pair
             if buster.isstunned: continue
-            if buster.carrying: continue
+            if buster.carrying != NOTCARRYING: continue
             if buster.id in self.stun_used \
                 and self.turn - self.stun_used[buster.id] < STUN_RECHARGE - 3:
                     continue
@@ -246,7 +249,7 @@ class gamestate(object):
                         t.target = tcell.center
                 log("New target for " + str(t) + " is " + str(t.target))
 
-            if t.carrying:
+            if t.carrying != NOTCARRYING:
                 if t.x == self.base.x and t.y == self.base.y:
                     yield "RELEASE I ain't afraid of no ghost!"
                     ghostid = t.target.id
@@ -260,7 +263,7 @@ class gamestate(object):
                 closeenemies = [ enemy for enemy in self.enemy \
                     if not enemy in self.neutralized \
                     and not enemy.isstunned \
-                    and enemy.carrying ]
+                    and enemy.carrying != NOTCARRYING ]
                 #todo extr abstr canstunin(buster, turncount)
                 e = findshootable(t, closeenemies) if canstun else None
                 if e:
