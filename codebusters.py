@@ -11,6 +11,9 @@ SHOOTMIN = 900
 SHOOTMAX = 1760
 
 TODO="""
+Remember the ghosts we carry.
+Insist less on set targets.
+Target carriers instead of strong ghosts.
 ???
 PROFIT!
 """
@@ -151,12 +154,14 @@ class gamestate(object):
         buster.x, buster.y = x, y
         buster.carrying = state == 1
         buster.isstunned = state == 2
+        if buster.isstunned: buster.target = None
         currentcell = self.grid.getfor(buster.x, buster.y)
         if currentcell in self.toexplore: self.toexplore.remove(currentcell)
         return buster
 
-    def updateghost(self, entity_id, x, y):
+    def updateghost(self, entity_id, x, y, stamina):
         newghost = Ghost(x,y,entity_id)
+        newghost.stamina = stamina
         self.ghosts.append(newghost)
         if not entity_id in self.ghostmem:
             self.ghostmem[entity_id] = newghost
@@ -172,7 +177,7 @@ class gamestate(object):
 
     def update(self, entity_id, x, y, entity_type, state, value):
         if entity_type == -1:
-            self.updateghost(entity_id, x, y)
+            self.updateghost(entity_id, x, y, state)
         elif entity_type == my_team_id:
             buster = self.updatebuster(entity_id, x, y, state)
             #todo: what about carried ghosts?
@@ -180,7 +185,7 @@ class gamestate(object):
             self.updateenemy(entity_id, x, y, state, value)
 
     def getenemybase(self):
-        return getbase(1-self.teamid, 2000)
+        return getbase(1-self.teamid, 1700)
 
     def chooseterminator(self):
         enemybase = self.getenemybase()
@@ -216,7 +221,7 @@ class gamestate(object):
                     t.target = enemybase
                 else:
                     if self.ghostmem:
-                        ghosts = self.ghostmem.values()
+                        ghosts = [ g for g in self.ghostmem.values() if g.stamina <= 2 ]
                         ghostdists = [ (dist(t, g), g,) for g in ghosts]
                         filtered = []
                         for d, g in ghostdists:
