@@ -149,6 +149,11 @@ class gamestate(object):
         self.turn += 1
         self.ghosts = []
 
+    def turnsuntilstun(buster):
+        if not buster.id in self.stun_used: return 0
+        turnspassed = self.turn - self.stun_used[buster.id]
+        return STUN_RECHARGE - turnspassed
+
     def updateghost(self, entity_id, x, y, stamina):
         newghost = Ghost(x,y,entity_id)
         newghost.stamina = stamina
@@ -191,15 +196,16 @@ class gamestate(object):
         return getbase(1-self.teamid, 1700)
 
     def chooseterminator(self):
+        if self.squadsize < 2: return -1
         enemybase = self.getenemybase()
         myteam = sortdistances(enemybase, self.team.values())
         for pair in myteam:
             dst, buster = pair
             if buster.isstunned: continue
             if buster.carrying != NOTCARRYING: continue
-            if buster.id in self.stun_used \
-                and self.turn - self.stun_used[buster.id] < STUN_RECHARGE - 3:
-                    continue
+            #todo: what was I doing?
+            #todo calculate turns needed to cover the distance to the enemy base, instead of fixed value
+            if self.turnsuntilstun(buster) < 3: continue
             return buster.id
         return -1
 
@@ -214,9 +220,8 @@ class gamestate(object):
                 yield "MOVE 0 0 You'll regret that!"
                 continue
             terminator = t.id == terminatorid \
-                and len(self.team) > 1 \
-                and len(self.team)>len(self.neutralized) \
-                and (not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE / 2)
+                and self.squadsize > len(self.neutralized) \
+                and self.turnsuntilstun(t) < STUN_RECHARGE /2
             log("Current target for " + str(t) + " is " + str(t.target))
             if not t.target:
                 if terminator:
@@ -259,17 +264,17 @@ class gamestate(object):
                 else:
                     yield "MOVE %d %d"%(self.base.x, self.base.y,)
             else:
-                canstun = not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE
+                canstun = self.turnsuntilstun(t) < 1
                 closeenemies = [ enemy for enemy in self.enemy \
                     if not enemy in self.neutralized \
                     and not enemy.isstunned \
                     and enemy.carrying != NOTCARRYING ]
-                #todo extr abstr canstunin(buster, turncount)
                 e = findshootable(t, closeenemies) if canstun else None
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
                     self.stun_used[t.id] = self.turn
                     t.target = None
+                    #todo bring neutralization back
                     #self.neutralized.append(e.id)
                 else:
                     g = findshootable(t, self.ghosts) if not terminator else None
