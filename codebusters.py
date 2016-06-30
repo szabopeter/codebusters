@@ -41,7 +41,9 @@ class Enemy(Actor):
     pass
 
 class Buster(Actor):
-    pass
+    def __init__(self, x, y, id):
+        Point.__init__(self, x, y, id)
+        self.target = None
 
 class Ghost(Actor):
     pass
@@ -128,7 +130,6 @@ class gamestate(object):
         self.teamid = my_team_id
         self.ghostcount = ghost_count
         self.squadsize = busters_per_player
-        self.targets = {}
         self.base = getbase(my_team_id)
         self.stun_used = {}
         self.turn = -1
@@ -136,18 +137,20 @@ class gamestate(object):
         self.ghostmem = {}
         self.grid = grid(GRIDSIZE)
         self.toexplore = self.grid.getcells()
+        self.team = {}
     
     def start_turn(self):
         self.turn += 1
         self.ghosts = []
-        self.team = []
         self.enemy = []
         self.carriers = []
         self.stunned = []
 
     def updatebuster(self, entity_id, x, y, state):
-        buster = Buster(x, y, entity_id)
-        self.team.append(buster)
+        if not entity_id in self.team:
+            self.team[entity_id] = Buster(x, y, entity_id)
+        buster = self.team[entity_id]
+        buster.x, buster.y = x, y
         if state == 1: self.carriers.append(entity_id)
         if state == 2: self.stunned.append(entity_id)
         currentcell = self.grid.getfor(buster.x, buster.y)
@@ -173,7 +176,6 @@ class gamestate(object):
         elif entity_type == my_team_id:
             buster = self.updatebuster(entity_id, x, y, state)
             #todo: what about carried ghosts?
-            buster.target = None
         else:
             self.updateenemy(entity_id, x, y, state, value)
 
@@ -182,7 +184,7 @@ class gamestate(object):
 
     def chooseterminator(self):
         enemybase = self.getenemybase()
-        myteam = sortdistances(enemybase, self.team)
+        myteam = sortdistances(enemybase, self.team.values())
         for pair in myteam:
             dst, buster = pair
             if buster.id in self.stunned: continue
@@ -193,10 +195,13 @@ class gamestate(object):
             return buster.id
         return -1
 
+    def getalltargets(self):
+        return [ b.target for b in self.team.values() ]
+
     def actions(self):
         #ret commands
         terminatorid = self.chooseterminator()
-        for t in self.team:
+        for t in self.team.values():
             if t.id in self.stunned:
                 yield "MOVE 0 0 You'll regret that!"
                 continue
@@ -204,9 +209,8 @@ class gamestate(object):
                 and len(self.team) > 1 \
                 and len(self.team)>len(self.neutralized) \
                 and (not t.id in self.stun_used or self.turn - self.stun_used[t.id] >= STUN_RECHARGE / 2)
-            t.target = self.targets[t.id] if t.id in self.targets else None
             log("Current target for " + str(t) + " is " + str(t.target))
-            if not t.id in self.targets:
+            if not t.target:
                 if terminator:
                     enemybase = self.getenemybase()
                     t.target = enemybase
@@ -230,23 +234,20 @@ class gamestate(object):
                         centers = {}
                         for cell in consider:
                             centers[cell.center] = cell
-                        for targeted in self.targets.values():
+                        for targeted in self.getalltargets():
                             if targeted in centers:
                                 consider.remove(centers[targeted])
                         tcell = self.grid.closest(t, consider)
                         t.target = tcell.center
-                self.targets[t.id] = t.target
                 log("New target for " + str(t) + " is " + str(t.target))
-
-            target = t.target
 
             if t.id in self.carriers:
                 if t.x == self.base.x and t.y == self.base.y:
                     yield "RELEASE I ain't afraid of no ghost!"
-                    ghostid = self.targets[t.id].id
+                    ghostid = t.target.id
                     if ghostid in self.ghostmem:
                         del self.ghostmem[ghostid]
-                    del self.targets[t.id]
+                    t.target = None
                 else:
                     yield "MOVE %d %d"%(self.base.x, self.base.y,)
             else:
@@ -257,18 +258,18 @@ class gamestate(object):
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
                     self.stun_used[t.id] = self.turn
-                    del self.targets[t.id]
+                    t.target = None
                     #self.neutralized.append(e.id)
                 else:
                     g = findshootable(t, self.ghosts) if not terminator else None
                     if g:
                         yield "BUST %d Ghost Busters!"%(g.id,)
-                    elif t.x == target.x and t.y == target.y:
+                    elif t.x == t.target.x and t.y == t.target.y:
                         log("%d in position, but no target..."%(t.id))
-                        yield "MOVE %d %d Who you gonna call?"%(target.x, target.y,)
-                        del self.targets[t.id]
+                        yield "MOVE %d %d Who you gonna call?"%(t.target.x, t.target.y,)
+                        t.target = None
                     else:
-                        yield "MOVE %d %d"%(target.x, target.y,)
+                        yield "MOVE %d %d"%(t.target.x, t.target.y,)
                         
     def dump(self):
         log("----------")
@@ -294,7 +295,7 @@ while True:
         # entity_id: buster id or ghost id
         # y: position of this buster / ghost
         # entity_type: the team id if it is a buster, -1 if it is a ghost.
-        # state: For busters: 0=idle, 1=carrying a ghost.
+        # state: For busters: 0=idle, 1=carrying a ghost, 2=stunned
         # value: For busters: Ghost id being carried. For ghosts: number of busters attempting to trap this ghost.
         entity_id, x, y, entity_type, entity_state, value = [int(j) for j in input().split()]
         state.update(entity_id, x, y, entity_type, entity_state, value)
