@@ -219,7 +219,8 @@ class gamestate(object):
             ls = self.stun_used[buster.id] if buster.id in self.stun_used else "<never>"
             tw = self.turnsuntilstun(buster)
             #log("Stunned in turn %s, current one is %d, %d more to wait."%(ls, self.turn, tw,))
-            if self.turnsuntilstun(buster) < 3: 
+            if self.turnsuntilstun(buster) < 3:
+                buster.target = self.getenemybase()
                 return buster.id
         return -1
 
@@ -234,7 +235,6 @@ class gamestate(object):
                 if t.target == self.team[terminatorid].target \
                     and t.id != terminatorid:
                         t.target = None
-            t.target = None
         #log("Terminator is %d now"%terminatorid)
         for t in self.team.values():
             if t.isstunned:
@@ -293,23 +293,28 @@ class gamestate(object):
                             targetreason = "to explore - %d"%(len(self.toexplore))
                 log("New target (%s) for "%targetreason + str(t) + " is " + str(t.target))
 
+            canstun = self.turnsuntilstun(t) < 1
+            closeenemies = [ enemy for enemy in self.enemy.values() \
+                if not enemy in self.neutralized \
+                and not enemy.isstunned \
+                and enemy.visible
+                and enemy.carrying != NOTCARRYING ]
+
+            e = findshootable(t, closeenemies) if canstun else None
+            
             if t.carrying != NOTCARRYING:
-                ghostid = t.carrying
-                if t.x == self.base.x and t.y == self.base.y:
-                    yield "RELEASE I ain't afraid of no ghost!"
-                    if ghostid in self.ghostmem:
-                        del self.ghostmem[ghostid]
-                    t.target = None
+                if e and e.carrying != NOTCARRYING:
+                    yield "STUN %d Just you and me, buddy!"%(e.id,)
                 else:
-                    yield "MOVE %d %d"%(self.base.x, self.base.y,)
+                    ghostid = t.carrying
+                    if t.x == self.base.x and t.y == self.base.y:
+                        yield "RELEASE I ain't afraid of no ghost!"
+                        if ghostid in self.ghostmem:
+                            del self.ghostmem[ghostid]
+                        t.target = None
+                    else:
+                        yield "MOVE %d %d"%(self.base.x, self.base.y,)
             else:
-                canstun = self.turnsuntilstun(t) < 1
-                closeenemies = [ enemy for enemy in self.enemy.values() \
-                    if not enemy in self.neutralized \
-                    and not enemy.isstunned \
-                    and enemy.visible
-                    and enemy.carrying != NOTCARRYING ]
-                e = findshootable(t, closeenemies) if canstun else None
                 if e:
                     yield "STUN %d Get lost copycat!"%(e.id,)
                     self.stun_used[t.id] = self.turn
