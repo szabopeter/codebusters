@@ -70,7 +70,7 @@ class Ghost(MapObject):
         self.nr = int(nr)
         self.tnr = -1
 
-class Player(MapObject):
+class Buster(MapObject):
     def __init__(self, nr, pos, tnr):
         MapObject.__init__(self, pos)
         self.nr = int(nr)
@@ -94,14 +94,15 @@ class Simulator(SimulatorParams):
         random.seed(params.seed)
         self.algos = [ algo0, algo1 ]
         self.scores = [ 0, 0 ]
-        self.ghosts = {}
-        self.players = []
+        self.ghosts = []
+        self.busters = []
         self.turn = 0
         
         for i in range(params.ghostcount):
             x = XC(random.randrange(MAPW))
             y = YC(random.randrange(MAPH))
-            self.ghosts[i] = Ghost(i, Position(x, y))
+            g = Ghost(i, Position(x, y))
+            self.ghosts.append(g)
 
         startingpositions = STARTING_POSITIONS[params.squadsize]
         for tnr in TEAMIDS:
@@ -110,24 +111,49 @@ class Simulator(SimulatorParams):
                 x, y = startingpositions[i]
                 if tnr: x, y = MAPW - x, MAPH - y
                 pos = Position(XC(x), YC(y))
-                p1 = Player(len(self.players), pos, tnr)
-                self.players.append(p1)
+                p1 = Buster(len(self.busters), pos, tnr)
+                self.busters.append(p1)
 
     def informTeams(self):
         for tnr in TEAMIDS:
-            teampositions = [ p.pos for p in self.players if p.tnr == tnr ]
-            actors = self.players[:] + self.ghosts[:]
+            algo = self.algos[tnr]
+            algo.start_turn()
+            teampositions = [ p.pos for p in self.busters if p.tnr == tnr ]
+            actors = self.busters[:] + self.ghosts[:]
             visibles = [ a for a in actors if a.pos.isVisibleToAny(teampositions) ]
             # todo isVisibleToAny
             for a in visibles:
-                self.algos[tnr].update(a.nr, a.pos.getx(), a.pos.gety(), a.tnr, a.state, a.value)
+                algo.update(a.nr, a.pos.getx(), a.pos.gety(), a.tnr, a.state, a.value)
+
+    def createCommand(self, buster, action):
+        ss = action.split()
+        if ss[0] == "MOVE":
+            target = Position(XC(ss[1]), YC(ss[2]))
+            cmd = MoveCommand(buster, target)
+        elif ss[0] == "STUN":
+            targetid = int(ss[1])
+            target = self.busters[targetid]
+            cmd = StunCommand(buster, target)
+        elif ss[0] == "BUST":
+            targetid = int(ss[1])
+            cmd = BustCommand(buster, self.ghosts[targetid])
+        elif ss[0] == "RELEASE":
+            cmd = ReleaseCommand(buster)
+        else:
+            cmd = FailedCommand(buster)
+        return cmd
 
     def askActions(self):
-        for tnr in TEAMIDS:
-            actions = self.ask
+        self.actions = [ list(self.algos[tnr].actions()) for tnr in TEAMIDS ]
 
     def executeActions(self):
-        pass
+        self.commands = []
+        for buster in self.busters:
+            nextaction = self.actions[buster.id][0]
+            del self.actions[buster.id][0]
+            command = self.createCommand(buster, nextaction)
+            if command:
+                self.commands.append(command)
 
     def moveGhosts(self):
         pass

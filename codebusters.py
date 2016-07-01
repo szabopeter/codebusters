@@ -198,7 +198,7 @@ class gamestate(object):
     def update(self, entity_id, x, y, entity_type, state, value):
         if entity_type == -1:
             self.updateghost(entity_id, x, y, state)
-        elif entity_type == my_team_id:
+        elif entity_type == self.teamid:
             buster = self.updatebuster(entity_id, x, y, state, value)
         else:
             self.updateenemy(entity_id, x, y, state, value)
