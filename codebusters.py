@@ -14,6 +14,7 @@ TODO="""
 Remember the ghosts we carry. And forget the ones we lost.
 Insist less on set targets.
 Target carriers instead of strong ghosts.
+Be prepared for terminator duty.
 ???
 PROFIT!
 """
@@ -152,7 +153,7 @@ class gamestate(object):
         self.turn += 1
         self.ghosts = []
 
-    def turnsuntilstun(buster):
+    def turnsuntilstun(self, buster):
         if not buster.id in self.stun_used: return 0
         turnspassed = self.turn - self.stun_used[buster.id]
         return STUN_RECHARGE - turnspassed
@@ -184,7 +185,7 @@ class gamestate(object):
         enemy.x, enemy.y = x, y
         if state == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
         enemy.carrying = ghostid if state == 1 else NOTCARRYING
-        enemy.isstunned = hasghost == 2
+        enemy.isstunned = state == 2
         return enemy
 
     def update(self, entity_id, x, y, entity_type, state, value):
@@ -268,7 +269,7 @@ class gamestate(object):
                     yield "MOVE %d %d"%(self.base.x, self.base.y,)
             else:
                 canstun = self.turnsuntilstun(t) < 1
-                closeenemies = [ enemy for enemy in self.enemy \
+                closeenemies = [ enemy for enemy in self.enemy.values() \
                     if not enemy in self.neutralized \
                     and not enemy.isstunned \
                     and enemy.carrying != NOTCARRYING ]
