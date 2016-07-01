@@ -5,6 +5,7 @@ import random
 MAPW = 16001
 MAPH = 9001
 GRIDSIZE = 2000
+BLACKMAPGRIDS = int( MAPW / GRIDSIZE * MAPH / GRIDSIZE * 10/100)
 STUN_RECHARGE = 20
 DEFAULTBASEOFFSET = 1100
 SHOOTMIN = 900
@@ -16,7 +17,7 @@ Insist less on set targets.
 Target carriers instead of strong ghosts.
 Be prepared for terminator duty.
 Patrol instead of waiting in one place.
-Remember enemy stun abilities. Do you feel lucky, punk?
+No need to explore everything.
 ???
 PROFIT!
 """
@@ -155,6 +156,8 @@ class gamestate(object):
     def start_turn(self):
         self.turn += 1
         self.ghosts = []
+        for enemy in self.enemy.values():
+            enemy.visible = False
 
     def turnsuntilstun(self, buster):
         if not buster.id in self.stun_used: return 0
@@ -186,6 +189,7 @@ class gamestate(object):
             self.enemy[entity_id] = Enemy(x, y, entity_id)
         enemy = self.enemy[entity_id]
         enemy.x, enemy.y = x, y
+        enemy.visible = True
         if state == 1 and ghostid in self.ghostmem: del self.ghostmem[ghostid]
         enemy.carrying = ghostid if state == 1 else NOTCARRYING
         enemy.isstunned = state == 2
@@ -214,7 +218,7 @@ class gamestate(object):
             #todo calculate turns needed to cover the distance to the enemy base, instead of fixed value
             ls = self.stun_used[buster.id] if buster.id in self.stun_used else "<never>"
             tw = self.turnsuntilstun(buster)
-            log("Stunned in turn %s, current one is %d, %d more to wait."%(ls, self.turn, tw,))
+            #log("Stunned in turn %s, current one is %d, %d more to wait."%(ls, self.turn, tw,))
             if self.turnsuntilstun(buster) < 3: 
                 return buster.id
         return -1
@@ -230,7 +234,8 @@ class gamestate(object):
                 if t.target == self.team[terminatorid].target \
                     and t.id != terminatorid:
                         t.target = None
-        log("Terminator is %d now"%terminatorid)
+            t.target = None
+        #log("Terminator is %d now"%terminatorid)
         for t in self.team.values():
             if t.isstunned:
                 yield "MOVE 0 0 You'll regret that!"
@@ -241,24 +246,30 @@ class gamestate(object):
             isterm = ", the T" if terminator else ""
             log("Current target for " + str(t) + isterm + " is " + str(t.target))
             if not t.target:
+                targetreason = "No reason"
                 if terminator:
                     enemybase = self.getenemybase()
                     t.target = enemybase
+                    targetreason = "to terminate"
                 else:
                     if self.ghostmem:
-                        ghosts = [ g for g in self.ghostmem.values() if g.stamina <= 2 ]
+                        ghosts = [ g for g in self.ghostmem.values() if \
+                            (g.stamina <= 2 and dist(t,g)< 3 * SHOOTMAX) \
+                            or len(self.toexplore)<BLACKMAPGRIDS ]
                         ghostdists = [ (dist(t, g), g,) for g in ghosts]
                         filtered = []
                         for d, g in ghostdists:
-                            # if d < 20:
+                            #if d < 20:
                             #     del self.ghostmem[g.id]
                             # else:
+                            if d > SHOOTMIN:
                                 filtered.append((d,g,))
                         if filtered:
                             ghostdists = filtered
                             ghostdists.sort(key=lambda pair : pair[0])
                             d, g = ghostdists[0]
                             t.target = g
+                            targetreason = "to bust an easy ghost"
                     if not t.target:
                         consider = self.toexplore[:]
                         centers = {}
@@ -269,19 +280,23 @@ class gamestate(object):
                                 consider.remove(centers[targeted])
                         tcell = self.grid.closest(t, consider)
                         if tcell == None:
-                            ghosts = self.ghostmem().values()[:]
+                            ghosts = [ g for g in self.ghostmem.values() ]
                             ghostdistances = sortdistances(t, ghosts)
                             if ghostdistances:
                                 t.target = ghostdistances[0][1]
+                                targetreason = "nothing to explore, get back to a ghost"
                             else:
                                 t.target = self.getenemybase()
-                        t.target = tcell.center
-                log("New target for " + str(t) + " is " + str(t.target))
+                                targetreason = "nothing to explore, no known ghosts"
+                        else:
+                            t.target = tcell.center
+                            targetreason = "to explore - %d"%(len(self.toexplore))
+                log("New target (%s) for "%targetreason + str(t) + " is " + str(t.target))
 
             if t.carrying != NOTCARRYING:
+                ghostid = t.carrying
                 if t.x == self.base.x and t.y == self.base.y:
                     yield "RELEASE I ain't afraid of no ghost!"
-                    ghostid = t.target.id
                     if ghostid in self.ghostmem:
                         del self.ghostmem[ghostid]
                     t.target = None
@@ -292,6 +307,7 @@ class gamestate(object):
                 closeenemies = [ enemy for enemy in self.enemy.values() \
                     if not enemy in self.neutralized \
                     and not enemy.isstunned \
+                    and enemy.visible
                     and enemy.carrying != NOTCARRYING ]
                 e = findshootable(t, closeenemies) if canstun else None
                 if e:
