@@ -15,6 +15,7 @@ Remember the ghosts we carry. And forget the ones we lost.
 Insist less on set targets.
 Target carriers instead of strong ghosts.
 Be prepared for terminator duty.
+Patrol instead of waiting in one place.
 ???
 PROFIT!
 """
@@ -112,6 +113,7 @@ class grid(object):
         return self.data[gy][gx]
 
     def closest(self, origo, data):
+        if not data: return None
         distances = [ (cell, celldist(origo, cell),) for cell in data ]
         distances.sort(key=lambda item:item[1])
         closestcell = distances[0][0]
@@ -222,6 +224,11 @@ class gamestate(object):
     def actions(self):
         #ret commands
         terminatorid = self.chooseterminator()
+        if terminatorid != -1:
+            for t in self.team.values():
+                if t.target == self.team[terminatorid].target \
+                    and t.id != terminatorid:
+                        t.target = None
         log("Terminator is %d now"%terminatorid)
         for t in self.team.values():
             if t.isstunned:
@@ -242,9 +249,9 @@ class gamestate(object):
                         ghostdists = [ (dist(t, g), g,) for g in ghosts]
                         filtered = []
                         for d, g in ghostdists:
-                            if d < 20:
-                                del self.ghostmem[g.id]
-                            else:
+                            # if d < 20:
+                            #     del self.ghostmem[g.id]
+                            # else:
                                 filtered.append((d,g,))
                         if filtered:
                             ghostdists = filtered
@@ -260,6 +267,13 @@ class gamestate(object):
                             if targeted in centers:
                                 consider.remove(centers[targeted])
                         tcell = self.grid.closest(t, consider)
+                        if tcell == None:
+                            ghosts = self.ghostmem().values()[:]
+                            ghostdistances = sortdistances(t, ghosts)
+                            if ghostdistances:
+                                t.target = ghostdistances[0][1]
+                            else:
+                                t.target = self.getenemybase()
                         t.target = tcell.center
                 log("New target for " + str(t) + " is " + str(t.target))
 
