@@ -16,6 +16,7 @@ Insist less on set targets.
 Target carriers instead of strong ghosts.
 Be prepared for terminator duty.
 Patrol instead of waiting in one place.
+Remember enemy stun abilities. Do you feel lucky, punk?
 ???
 PROFIT!
 """
