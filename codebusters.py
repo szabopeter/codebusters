@@ -209,8 +209,11 @@ class gamestate(object):
             if buster.carrying != NOTCARRYING: continue
             #todo: what was I doing?
             #todo calculate turns needed to cover the distance to the enemy base, instead of fixed value
-            if self.turnsuntilstun(buster) < 3: continue
-            return buster.id
+            ls = self.stun_used[buster.id] if buster.id in self.stun_used else "<never>"
+            tw = self.turnsuntilstun(buster)
+            log("Stunned in turn %s, current one is %d, %d more to wait."%(ls, self.turn, tw,))
+            if self.turnsuntilstun(buster) < 3: 
+                return buster.id
         return -1
 
     def getalltargets(self):
@@ -219,6 +222,7 @@ class gamestate(object):
     def actions(self):
         #ret commands
         terminatorid = self.chooseterminator()
+        log("Terminator is %d now"%terminatorid)
         for t in self.team.values():
             if t.isstunned:
                 yield "MOVE 0 0 You'll regret that!"
@@ -226,7 +230,8 @@ class gamestate(object):
             terminator = t.id == terminatorid \
                 and self.squadsize > len(self.neutralized) \
                 and self.turnsuntilstun(t) < STUN_RECHARGE /2
-            log("Current target for " + str(t) + " is " + str(t.target))
+            isterm = ", the T" if terminator else ""
+            log("Current target for " + str(t) + isterm + " is " + str(t.target))
             if not t.target:
                 if terminator:
                     enemybase = self.getenemybase()
