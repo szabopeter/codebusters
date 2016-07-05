@@ -1,4 +1,4 @@
-import unittest
+
 
 class Ordinate(object):
     def __init__(self, val):
@@ -23,13 +23,19 @@ class Ordinate(object):
         assert type(multiplier) in (type(0), type(0.0))
         return self.modified(self.getval() * multiplier)
 
+    def modified(self, value):
+        return Ordinate(value)
+
+
 class XC(Ordinate):
     def modified(self, value):
         return XC(value)
 
+
 class YC(Ordinate):
     def modified(self, value):
         return YC(value)
+
 
 class Position(object):
     def __init__(self, x, y):
@@ -47,75 +53,22 @@ class Position(object):
     def gety(self):
         return self.y.getval()
 
-    def distTo(self, other):
+    def dist_to(self, other):
         xd = int(self.x - other.x)
         yd = int(self.y - other.y)
-        return int((xd**2 + yd**2)**0.5)
+        return int((xd ** 2 + yd ** 2) ** 0.5)
 
-    def isCloseToAny(self, poslist, maxdist):
+    def is_close_to_any(self, poslist, maxdist):
         for pos in poslist:
-            if self.distTo(pos) <= maxdist:
+            if self.dist_to(pos) <= maxdist:
                 return True
         return False
 
     def towards(self, other, maxdist):
-        dist = self.distTo(other)
+        dist = self.dist_to(other)
         if dist <= maxdist:
             return other
         r = maxdist / dist
         x = (other.x - self.x) * r + self.x
         y = (other.y - self.y) * r + self.y
         return Position(x, y)
-
-class coordinatesystemTestcase(unittest.TestCase):
-    def testOrdinateEquality(self):
-        self.assertNotEqual(XC(25), XC(444))
-        self.assertEqual(XC(55), XC(55))
-        self.assertNotEqual(XC(55), YC(55))
-
-    def testOrindateAddition(self):
-        x1 = XC(100)
-        x2 = XC(200)
-        self.assertEqual(XC(300), x1 + x2)
-
-    def testOrdinateMultiplication(self):
-        x1 = XC(100)
-        self.assertEqual(XC(300), x1 * 3)
-
-    def testPositionEquality(self):
-        p1 = Position(XC(100), YC(180))
-        p2 = Position(XC(55), YC(60))
-        self.assertNotEqual(p1, p2)
-        self.assertEqual(p1, Position(XC(100), YC(180)))
-
-    def testDistTo(self):
-        p1 = Position(XC(100), YC(200))
-        p2 = Position(XC(100+300), YC(200+400))
-        self.assertEqual(0, p1.distTo(p1))
-        self.assertEqual(500, p1.distTo(p2))
-        self.assertEqual(500, p2.distTo(p1))
-
-    def testIsCloseTo(self):
-        p0 = Position(XC(100), YC(200))
-        pts = (
-            Position(XC(100+30), YC(200+40)),
-            Position(XC(100+60), YC(200+80)),
-            Position(XC(100-90), YC(200-120)),
-            )
-        self.assertTrue(p0.isCloseToAny(pts, 50))
-        self.assertFalse(p0.isCloseToAny(pts, 49))
-        self.assertTrue(pts[2].isCloseToAny(pts, 0))
-
-    def testTowards(self):
-        origin = Position(XC(100), YC(200))
-        target = Position(XC(100+2*30), YC(200-2*40))
-        expected = Position(XC(100+30), YC(200-40))
-        actual = origin.towards(target, 50)
-        self.assertEqual(expected, actual)
-
-        expected = target
-        actual = origin.towards(target, 999)
-        self.assertEqual(expected, actual)
-
-if __name__ == '__main__':
-    unittest.main()
