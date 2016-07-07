@@ -20,6 +20,8 @@ MAPW = 16001
 MAPH = 9001
 TEAMIDS = (0, 1,)
 VISIBILITY = 2200
+GHOST_MOVE_DIST = 400
+BUSTER_MOVE_DIST = 800
 
 STATE_STUNNED = 2
 STATE_CARRYING = 1
@@ -42,6 +44,7 @@ class Ghost(MapObject):
         MapObject.__init__(self, pos)
         self.nr = int(nr)
         self.tnr = -1
+        self.max_move_dist = GHOST_MOVE_DIST
 
 
 class Buster(MapObject):
@@ -50,6 +53,7 @@ class Buster(MapObject):
         self.nr = int(nr)
         self.tnr = tnr
         self.carries = None
+        self.max_move_dist = BUSTER_MOVE_DIST
 
     def stun(self):
         self.state = STATE_STUNNED
@@ -57,6 +61,61 @@ class Buster(MapObject):
     def grab(self, ghost):
         assert isinstance(ghost, Ghost)
         self.carries = ghost
+
+
+class Command(object):
+    def __init__(self):
+        self.priority = 100
+
+    def append_to(self, appendable):
+        appendable.append(self)
+
+    def execute(self):
+        pass
+
+
+class MoveCommand(Command):
+    def __init__(self, actor, target):
+        assert isinstance(actor, MapObject)
+        assert isinstance(target, Position)
+        self.actor = actor
+        self.target = target
+        self.priority =
+
+    def execute(self):
+        max_dist = self.actor.max_move_dist
+        targetpos = self.actor.pos.towards(self.target, max_dist)
+
+
+class StunCommand(Command):
+    def __init__(self, actor, targetactor):
+        assert isinstance(actor, Buster)
+        assert isinstance(targetactor, Buster)
+        self.actor = actor
+        self.target = targetactor
+
+
+class BustCommand(Command):
+    def __init__(self, actor, targetactor):
+        assert isinstance(actor, Buster)
+        assert isinstance(targetactor, Ghost)
+        self.actor = actor
+        self.target = targetactor
+
+
+class ReleaseCommand(Command):
+    def __init__(self, actor):
+        self.actor = actor
+
+
+class FailedCommand(Command):
+    def append(self, _):
+        pass
+
+
+class DoNothingCommand(Command):
+    def __init__(self, actor):
+        self.actor = actor
 
 
 class SimulatorParams(object):
@@ -76,6 +135,7 @@ class Simulator(SimulatorParams):
         self.actions = []
         self.commands = []
 
+        # todo split up method
         for i in range(params.ghostcount):
             x = XC(random.randrange(MAPW))
             y = YC(random.randrange(MAPH))
@@ -122,19 +182,31 @@ class Simulator(SimulatorParams):
         return cmd
 
     def ask_actions(self):
-        self.actions = [list(self.algos[tnr].actions()) for tnr in TEAMIDS]
+        actions = [list(self.algos[tnr].actions()) for tnr in TEAMIDS]
+        return actions
 
-    def execute_actions(self):
-        self.commands = []
+    def prepare_commands(self, actions):
+        commands = []
         for buster in self.busters:
-            nextaction = self.actions[buster.nr][0]
-            del self.actions[buster.nr][0]
+            nextaction = actions[buster.nr][0]
+            del actions[buster.nr][0]
             command = self.create_command(buster, nextaction)
-            if command:
-                self.commands.append(command)
+            command.append_to(self.commands)
 
-    def move_ghosts(self):
-        pass
+        for ghost in self.ghosts:
+            command = self.make_ghost_command(ghost)
+            command.append_to(self.commands)
+
+        return commands
+
+    def execute_commands(self, commands):
+        commands.sort(key = lambda command: command.priority)
+        for command in commands:
+            command.execute()
+
+    def make_ghost_command(self, ghost):
+        # todo: move away
+        return DoNothingCommand()
 
     def final_result(self):
         s0, s1 = self.scores
@@ -151,7 +223,8 @@ class Simulator(SimulatorParams):
     def play(self):
         while self.final_result() == KEEP_GOING:
             self.inform_teams()
-            self.ask_actions()
-            self.execute_actions()
-            self.move_ghosts()  # maybe incorporated in askActions
+            actions = self.ask_actions()
+            commands self.prepare_commands(actions)
+            self.execute_commands(commands)
             self.turn += 1
+

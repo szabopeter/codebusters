@@ -8,14 +8,25 @@ class CoordinateSystemTestCase(unittest.TestCase):
         self.assertEqual(XC(55), XC(55))
         self.assertNotEqual(XC(55), YC(55))
 
-    def testOrindateAddition(self):
+    def testOrdinateAddition(self):
         x1 = XC(100)
         x2 = XC(200)
         self.assertEqual(XC(300), x1 + x2)
 
+    def test_ordinate_Substraction(self):
+        x1 = XC(220)
+        x2 = XC(100)
+        self.assertEqual(XC(120), x1-x2)
+
     def testOrdinateMultiplication(self):
         x1 = XC(100)
-        self.assertEqual(XC(300), x1 * 3)
+        self.assertEqual(XC(300), x1 * 3.0)
+
+    def test_ordinate_weighted_midpoint(self):
+        x1 = XC(100)
+        x2 = XC(200)
+        xm = x1 + (x2-x1) * 0.259
+        self.assertEqual(XC(125), xm)
 
     def testPositionEquality(self):
         p1 = Position(XC(100), YC(180))
@@ -46,6 +57,14 @@ class CoordinateSystemTestCase(unittest.TestCase):
         target = Position(XC(100 + 2 * 30), YC(200 - 2 * 40))
         expected = Position(XC(100 + 30), YC(200 - 40))
         actual = origin.towards(target, 50)
+        self.assertEqual(expected, actual, str(expected) + "!=" + str(actual))
+
+        boundary = Boundary(Position(XC(100), YC(0)), Position(XC(100+30), YC(999)))
+        actual = origin.towards(target, 999, boundary)
+        self.assertEqual(expected, actual)
+
+        boundary = Boundary(Position(XC(0), YC(200-40)), Position(XC(999), YC(200)))
+        actual = origin.towards(target, 999, boundary)
         self.assertEqual(expected, actual)
 
         expected = target

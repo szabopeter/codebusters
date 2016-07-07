@@ -4,6 +4,9 @@ class Ordinate(object):
     def __init__(self, val):
         self.val = int(val)
 
+    def __str__(self):
+        return str(self.val)
+
     def getval(self): return self.val
 
     def __int__(self): return self.val
@@ -43,6 +46,9 @@ class Position(object):
         assert isinstance(y, YC)
         self.x, self.y = x, y
 
+    def __str__(self):
+        return "(%s, %s)"%(self.x, self.y,)
+
     def __eq__(self, other):
         assert isinstance(other, Position)
         return self.x == other.x and self.y == other.y
@@ -68,7 +74,8 @@ class Position(object):
         dist = self.dist_to(other)
         if dist <= maxdist:
             return other
-        r = maxdist / dist
+        r = float(maxdist) / dist
+        print("%s / %s = %s"%(maxdist, dist, r,))
         x = (other.x - self.x) * r + self.x
         y = (other.y - self.y) * r + self.y
         return Position(x, y)
