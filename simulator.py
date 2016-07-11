@@ -80,7 +80,7 @@ class MoveCommand(Command):
         assert isinstance(target, Position)
         self.actor = actor
         self.target = target
-        self.priority =
+        self.priority = 50
 
     def execute(self):
         max_dist = self.actor.max_move_dist
@@ -93,6 +93,7 @@ class StunCommand(Command):
         assert isinstance(targetactor, Buster)
         self.actor = actor
         self.target = targetactor
+        self.priority = 10
 
 
 class BustCommand(Command):
@@ -101,11 +102,13 @@ class BustCommand(Command):
         assert isinstance(targetactor, Ghost)
         self.actor = actor
         self.target = targetactor
+        self.priority = 20
 
 
 class ReleaseCommand(Command):
     def __init__(self, actor):
         self.actor = actor
+        self.priority = 30
 
 
 class FailedCommand(Command):

@@ -1,12 +1,29 @@
 import unittest
-from coordinatesystem import XC, YC, Position
+from coordinatesystem import Ordinate, XC, YC, Position, Boundary
 
 
+# todo split up class
 class CoordinateSystemTestCase(unittest.TestCase):
     def testOrdinateEquality(self):
         self.assertNotEqual(XC(25), XC(444))
         self.assertEqual(XC(55), XC(55))
         self.assertNotEqual(XC(55), YC(55))
+
+    def test_ordinate_ordering(self):
+        o = Ordinate(5)
+        x = XC(6)
+        y = YC(7)
+        self.assertLess(o, x)
+        self.assertLessEqual(o, x)
+        self.assertGreater(x, o)
+        with self.assertRaises(AssertionError):
+            x < y
+
+        l = [        XC(5), XC(1), XC(2), XC(4), XC(6), XC(0), XC(2) ]
+        self.assertEqual(XC(0), min(l))
+        self.assertEqual(XC(6), max(l))
+        expected = [ XC(0), XC(1), XC(2), XC(2), XC(4), XC(5), XC(6) ]
+        self.assertListEqual(expected, sorted(l))
 
     def testOrdinateAddition(self):
         x1 = XC(100)
@@ -21,6 +38,11 @@ class CoordinateSystemTestCase(unittest.TestCase):
     def testOrdinateMultiplication(self):
         x1 = XC(100)
         self.assertEqual(XC(300), x1 * 3.0)
+
+    def test_ordinate_division(self):
+        x1 = XC(100)
+        self.assertEqual(XC(33), x1 / 3)
+        self.assertEqual(XC(66), x1 * 2 / 3)
 
     def test_ordinate_weighted_midpoint(self):
         x1 = XC(100)
