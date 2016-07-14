@@ -6,4 +6,4 @@ p1 = gamestate()
 simulator = Simulator(SimulatorParams(3, 10, 0), p0, p1)
 simulator.play()
 
-print(simulator.final_result())
+print(simulator.scores)

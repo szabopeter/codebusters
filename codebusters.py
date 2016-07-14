@@ -10,6 +10,7 @@ STUN_RECHARGE = 20
 DEFAULTBASEOFFSET = 1100
 SHOOTMIN = 900
 SHOOTMAX = 1760
+LOG_ENABLED = False
 
 TODO="""
 Remember the ghosts we carry. And forget the ones we lost.
@@ -24,7 +25,8 @@ PROFIT!
 
 def log(s):
     # To debug: print("Debug messages...", file=sys.stderr)
-    print(s, file=sys.stderr)
+    if LOG_ENABLED:
+        print(s, file=sys.stderr)
 
 # Send your busters out into the fog to trap ghosts and bring them home!
 

@@ -1,5 +1,12 @@
 
 
+class safefloat(float):
+    def __truediv__(self, divisor):
+        try:
+            return float.__truediv__(self, divisor)
+        except ZeroDivisionError:
+            return self
+
 class Ordinate(object):
     def __init__(self, val):
         self.val = int(val)
@@ -34,7 +41,8 @@ class Ordinate(object):
         return self.modified(self.getval() - other.getval())
 
     def __mul__(self, multiplier):
-        assert type(multiplier) in (type(0), type(0.0))
+        assert isinstance(multiplier, int) \
+            or isinstance(multiplier, float)
         return self.modified(self.getval() * multiplier)
 
     def __truediv__(self, divisor):
@@ -113,9 +121,9 @@ class Position(object):
         if dd <= ld and dx <= lx and dy <= ly:
             return other
 
-        rd = float(ld) / int(dd)
-        rx = float(lx) / int(dx)
-        ry = float(ly) / int(dy)
+        rd = safefloat(ld) / int(dd)
+        rx = safefloat(lx) / int(dx)
+        ry = safefloat(ly) / int(dy)
 
         r = min(rd, rx, ry)
         

@@ -1,5 +1,5 @@
 import unittest
-from coordinatesystem import Ordinate, XC, YC, Position, Boundary
+from coordinatesystem import safefloat, Ordinate, XC, YC, Position, Boundary
 
 
 # todo split up class
@@ -93,6 +93,10 @@ class CoordinateSystemTestCase(unittest.TestCase):
         actual = origin.towards(target, 999)
         self.assertEqual(expected, actual)
 
+    def testSafeDivision(self):
+        self.assertEqual(2.5, safefloat(10) / 4)
+        self.assertEqual(200, safefloat(200)/ 0)
+        self.assertEqual(2.0, safefloat(10) / 5)
 
 if __name__ == '__main__':
     unittest.main()
