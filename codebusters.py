@@ -2,6 +2,8 @@ import sys
 import math
 import random
 
+FEATURE_STUN = True
+
 MAPW = 16001
 MAPH = 9001
 GRIDSIZE = 2000
@@ -19,6 +21,8 @@ Target carriers instead of strong ghosts.
 Be prepared for terminator duty.
 Patrol instead of waiting in one place.
 No need to explore everything.
+Fix weird ping-pong bug.
+Keep count of captured and free ghosts.
 ???
 PROFIT!
 """
@@ -209,6 +213,7 @@ class gamestate(object):
         return getbase(1-self.teamid, 1700)
 
     def chooseterminator(self):
+        if not FEATURE_STUN: return -1
         if self.squadsize < 2: return -1
         enemybase = self.getenemybase()
         myteam = sortdistances(enemybase, self.team.values())
@@ -295,7 +300,7 @@ class gamestate(object):
                             targetreason = "to explore - %d"%(len(self.toexplore))
                 log("New target (%s) for "%targetreason + str(t) + " is " + str(t.target))
 
-            canstun = self.turnsuntilstun(t) < 1
+            canstun = self.turnsuntilstun(t) < 1 and FEATURE_STUN
             closeenemies = [ enemy for enemy in self.enemy.values() \
                 if not enemy in self.neutralized \
                 and not enemy.isstunned \
